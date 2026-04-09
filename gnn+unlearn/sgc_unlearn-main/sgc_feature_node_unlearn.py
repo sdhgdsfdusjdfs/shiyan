@@ -212,6 +212,63 @@ def maybe_sample_debug_subgraph(data, debug_sample_size):
 
     return sampled_data
 
+
+def _candidate_base_dirs(data_dir):
+    script_dir = osp.dirname(osp.abspath(__file__))
+    candidates = []
+
+    raw_candidates = [data_dir]
+    if not osp.isabs(data_dir):
+        raw_candidates.append(osp.join(script_dir, data_dir))
+
+    for candidate in raw_candidates:
+        abs_candidate = osp.abspath(candidate)
+        if abs_candidate not in candidates:
+            candidates.append(abs_candidate)
+
+    project_root = osp.abspath(osp.join(script_dir, '..', '..'))
+    for candidate in [
+        project_root,
+        osp.join(project_root, 'data'),
+        osp.join(project_root, 'PyG_datasets'),
+        osp.join(project_root, 'PyG_datasets', 'data'),
+    ]:
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    return candidates
+
+
+def resolve_planetoid_root(data_dir, dataset_name):
+    dataset_name = dataset_name.lower()
+    for base_dir in _candidate_base_dirs(data_dir):
+        for candidate in [
+            osp.join(base_dir, dataset_name),
+            osp.join(base_dir, 'data', dataset_name),
+        ]:
+            raw_dir = osp.join(candidate, dataset_name, 'raw')
+            processed_dir = osp.join(candidate, dataset_name, 'processed')
+            if osp.isdir(raw_dir) or osp.isdir(processed_dir):
+                return candidate
+
+    return osp.join(osp.abspath(data_dir), 'data', dataset_name)
+
+
+def resolve_amazon_root(data_dir, dataset_name):
+    raw_file = f'amazon_electronics_{dataset_name.lower()}.npz'
+    for base_dir in _candidate_base_dirs(data_dir):
+        for candidate in [
+            osp.join(base_dir, 'Amazon'),
+            osp.join(base_dir, 'data', 'Amazon'),
+            base_dir,
+        ]:
+            raw_path = osp.join(candidate, dataset_name, 'raw', raw_file)
+            processed_path = osp.join(candidate, dataset_name, 'processed', 'data.pt')
+            if osp.exists(raw_path) or osp.exists(processed_path):
+                return candidate
+
+    return osp.join(osp.abspath(data_dir), 'data', dataset_name)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training a removal-enabled linear model [node/feature]')
     parser.add_argument('--data_dir', type=str, default='./PyG_datasets', help='data directory')
@@ -286,7 +343,8 @@ if __name__ == '__main__':
     num_classes = None
     # read data from PyG datasets (cora, citeseer, pubmed)
     if dataset_name in ['cora', 'citeseer', 'pubmed']:
-        path = osp.join(args.data_dir, 'data', args.dataset)
+        path = resolve_planetoid_root(args.data_dir, args.dataset)
+        print(f'Using Planetoid root: {path}')
         dataset = Planetoid(path, args.dataset, split="full")
         data = dataset[0]  # 先加载到CPU，再统一移到目标设备
         num_classes = dataset.num_classes
@@ -303,7 +361,8 @@ if __name__ == '__main__':
         data.y = data.y.squeeze(-1)
         num_classes = dataset.num_classes
     elif dataset_name in ['computers', 'photo']:
-        path = osp.join(args.data_dir, 'data', args.dataset)
+        path = resolve_amazon_root(args.data_dir, args.dataset)
+        print(f'Using Amazon root: {path}')
         dataset = Amazon(path, args.dataset)
         data = dataset[0]
         data = random_planetoid_splits(data, num_classes=dataset.num_classes, val_lb=500, test_lb=1000, Flag=1)
