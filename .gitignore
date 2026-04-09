@@ -1,0 +1,55 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local edit history
+.history/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs and local outputs
+*.log
+*.out
+result/
+**/result/
+log/
+**/log/
+
+# Model checkpoints / generated artifacts
+*.pth
+*.pt
+*.ckpt
+
+# Large datasets and processed cache
+data/
+PyG_datasets/
+**/PyG_datasets/
+dataset/
+**/dataset/
+datasets/
+**/datasets/
+processed/
+**/processed/
+raw/
+**/raw/
+EllipticPlusPlus/Actors Dataset/
+EllipticPlusPlus/Transactions Dataset/
+
+# Common archives for downloaded datasets
+*.zip
+*.npz
+*.npy
+*.pkl
+
+# Nested git repositories should not be tracked as metadata
+**/.git
+**/.git_repo_backup/
