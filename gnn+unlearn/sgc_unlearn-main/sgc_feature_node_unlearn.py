@@ -213,6 +213,21 @@ def maybe_sample_debug_subgraph(data, debug_sample_size):
     return sampled_data
 
 
+def build_node_removal_queue(train_id, deg, num_removes, strategy, seed=None):
+    if strategy == 'random':
+        if seed is not None:
+            np.random.seed(seed)
+        perm = torch.randperm(train_id.shape[0], device=train_id.device)
+        return train_id[perm]
+
+    if strategy == 'high_degree':
+        train_deg = deg[train_id].detach().cpu()
+        ranked = torch.argsort(train_deg, descending=True)
+        return train_id[ranked.to(train_id.device)]
+
+    raise ValueError(f"Unsupported node_delete_strategy: {strategy}")
+
+
 def _candidate_base_dirs(data_dir):
     script_dir = osp.dirname(osp.abspath(__file__))
     candidates = []
@@ -296,6 +311,8 @@ if __name__ == '__main__':
     parser.add_argument('--Y_binary', type=str, default='0', help='In binary mode, is Y_binary class or Y_binary_1 vs Y_binary_2 (i.e., 0+1).')
     parser.add_argument('--noise_mode', type=str, default='data', help='Data dependent noise or worst case noise [data/worst].')
     parser.add_argument('--removal_mode', type=str, default='node', help='[feature/edge/node].')
+    parser.add_argument('--node_delete_strategy', type=str, default='random',
+                        help='node removal order [random/high_degree].')
     parser.add_argument('--eps', type=float, default=1.0, help='Eps coefficient for certified removal.')
     parser.add_argument('--delta', type=float, default=1e-4, help='Delta coefficient for certified removal.')
     parser.add_argument('--disp', type=int, default=10, help='Display frequency.')
@@ -313,6 +330,7 @@ if __name__ == '__main__':
 
     # this script is only for feature/node removal
     assert args.removal_mode in ['feature', 'node']
+    assert args.node_delete_strategy in ['random', 'high_degree']
     # dont compute norm together with retrain
     assert not (args.compare_gnorm and args.compare_retrain)
 
@@ -397,7 +415,7 @@ if __name__ == '__main__':
 
     # save the degree of each node for later use
     row = data.edge_index[0]
-    deg = degree(row).to(device)  # 确保degree在正确设备上
+    deg = degree(row, num_nodes=data.num_nodes).to(device)  # 确保degree在正确设备上
 
     # ========== 核心修复3：节点特征处理优化 ==========
     # process features
@@ -489,6 +507,8 @@ if __name__ == '__main__':
     print("Train node:{}, Val node:{}, Test node:{}, Edges:{}, Feature dim:{}".format(
         X_train.shape[0], X_val.shape[0], X_test.shape[0],
         data.edge_index.shape[1], X_train.shape[1]))
+    if args.removal_mode == 'node':
+        print(f"Node deletion strategy: {args.node_delete_strategy}")
     if args.train_mode != 'binary':
         print_label_distribution('Train', y_train_labels, num_classes)
         print_label_distribution('Val', y_val, num_classes)
@@ -691,15 +711,18 @@ if __name__ == '__main__':
 
     for trail_iter in range(args.trails):
         print('*'*10, trail_iter, '*'*10)
-        if args.fix_random_seed:
-            # fix the random seed for perm
-            np.random.seed(trail_iter)
-        
-        # ========== 修复6：索引处理优化 ==========
-        # 确保索引在正确设备上
         train_id = effective_train_id
-        perm = torch.randperm(train_id.shape[0], device=device)
-        removal_queue = train_id[perm]
+        queue_seed = trail_iter if args.fix_random_seed else None
+        removal_queue = build_node_removal_queue(
+            train_id, deg, args.num_removes, args.node_delete_strategy, seed=queue_seed
+        )
+        if removal_queue.shape[0] < args.num_removes:
+            raise ValueError(
+                f"Removal queue too short: requested {args.num_removes}, got {removal_queue.shape[0]}"
+            )
+        train_pos = torch.empty(data.x.shape[0], dtype=torch.long, device=device)
+        train_pos[train_id] = torch.arange(train_id.shape[0], device=device)
+        perm = train_pos[removal_queue]
         edge_mask = torch.ones(data.edge_index.shape[1], dtype=torch.bool, device=device)
 
         X_scaled_copy = X_scaled_copy_guo.clone().detach()
@@ -1138,11 +1161,14 @@ if __name__ == '__main__':
     # save all results
     if not osp.exists(args.result_dir):
         os.makedirs(args.result_dir)
-    save_path = '%s/%s_std_%.0e_lam_%.0e_nr_%d_K_%d_opt_%s_mode_%s_eps_%.1f_delta_%.0e' % (
-        args.result_dir, args.dataset, b_std, args.lam, args.num_removes, args.prop_step, 
+    filename = '%s_std_%.0e_lam_%.0e_nr_%d_K_%d_opt_%s_mode_%s_eps_%.1f_delta_%.0e' % (
+        args.dataset, b_std, args.lam, args.num_removes, args.prop_step,
         args.optimizer, args.removal_mode, args.eps, args.delta)
+    save_path = osp.join(args.result_dir, filename)
     if args.train_mode == 'binary':
         save_path += '_bin_%s' % args.Y_binary
+    if args.removal_mode == 'node':
+        save_path += f'_{args.node_delete_strategy}'
     if args.GPR:
         save_path += '_gpr'
     if args.compare_gnorm:

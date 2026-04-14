@@ -7,6 +7,12 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data import Data
 
 
+def _index_to_mask(index: torch.Tensor, size: int) -> torch.Tensor:
+    mask = torch.zeros(size, dtype=torch.bool)
+    mask[index.long()] = True
+    return mask
+
+
 def read_dgraphfin(folder):
     print('read_dgraphfin')
     names = ['dgraphfin.npz']
@@ -24,14 +30,21 @@ def read_dgraphfin(folder):
     y = torch.tensor(y, dtype=torch.int64)
     edge_index = torch.tensor(edge_index.transpose(), dtype=torch.int64).contiguous()
     edge_type = torch.tensor(edge_type, dtype=torch.float)
-    train_mask = torch.tensor(train_mask, dtype=torch.int64)
-    valid_mask = torch.tensor(valid_mask, dtype=torch.int64)
-    test_mask = torch.tensor(test_mask, dtype=torch.int64)
+    train_index = torch.tensor(train_mask, dtype=torch.int64)
+    valid_index = torch.tensor(valid_mask, dtype=torch.int64)
+    test_index = torch.tensor(test_mask, dtype=torch.int64)
+
+    train_mask = _index_to_mask(train_index, x.size(0))
+    valid_mask = _index_to_mask(valid_index, x.size(0))
+    test_mask = _index_to_mask(test_index, x.size(0))
 
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_type, y=y)
     data.train_mask = train_mask
     data.valid_mask = valid_mask
     data.test_mask = test_mask
+    data.train_idx = train_index
+    data.valid_idx = valid_index
+    data.test_idx = test_index
 
     return data
 

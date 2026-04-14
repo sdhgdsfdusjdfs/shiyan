@@ -667,6 +667,74 @@ def _posterior_from_linear_model(w, X):
     return probs
 
 
+def _attack_features_from_linear_model(w, X, y=None, train_mode='ovr'):
+    with torch.no_grad():
+        if w.dim() == 1 or train_mode == 'binary':
+            logits_raw = X.mv(w) if w.dim() == 1 else X.mm(w).squeeze(-1)
+            probs_pos = torch.sigmoid(logits_raw)
+            probs = torch.stack([1 - probs_pos, probs_pos], dim=1)
+            max_conf = torch.maximum(probs[:, 0], probs[:, 1])
+            margin = (probs[:, 1] - probs[:, 0]).abs()
+            entropy = -(probs * torch.log(probs.clamp(min=1e-12))).sum(dim=1) / np.log(2)
+
+            feature_list = [
+                probs,
+                logits_raw.unsqueeze(1),
+                probs_pos.unsqueeze(1),
+                max_conf.unsqueeze(1),
+                margin.unsqueeze(1),
+                entropy.unsqueeze(1),
+                (probs_pos - 0.5).abs().unsqueeze(1),
+            ]
+
+            if y is not None:
+                y_binary = (y > 0).long() if y.dtype != torch.long else (y == 1).long()
+                row_idx = torch.arange(probs.size(0), device=probs.device)
+                true_prob = probs[row_idx, y_binary].clamp(min=1e-12)
+                alt_prob = probs[row_idx, 1 - y_binary].clamp(min=1e-12)
+                true_logit = torch.where(y_binary == 1, logits_raw, -logits_raw)
+                loss = -torch.log(true_prob)
+                feature_list.extend([
+                    true_prob.unsqueeze(1),
+                    alt_prob.unsqueeze(1),
+                    true_logit.unsqueeze(1),
+                    loss.unsqueeze(1),
+                ])
+
+            return torch.cat(feature_list, dim=1)
+
+        logits = X.mm(w)
+        probs = torch.softmax(logits, dim=1)
+        topk = min(2, probs.size(1))
+        top_probs = torch.topk(probs, k=topk, dim=1).values
+        max_conf = top_probs[:, 0]
+        margin = top_probs[:, 0] - top_probs[:, 1] if topk > 1 else top_probs[:, 0]
+        entropy = -(probs * torch.log(probs.clamp(min=1e-12))).sum(dim=1)
+        entropy = entropy / np.log(probs.size(1))
+
+        feature_list = [
+            probs,
+            logits,
+            max_conf.unsqueeze(1),
+            margin.unsqueeze(1),
+            entropy.unsqueeze(1),
+        ]
+
+        if y is not None:
+            y_idx = y.long()
+            row_idx = torch.arange(probs.size(0), device=probs.device)
+            true_prob = probs[row_idx, y_idx].clamp(min=1e-12)
+            true_logit = logits[row_idx, y_idx]
+            loss = -torch.log(true_prob)
+            feature_list.extend([
+                true_prob.unsqueeze(1),
+                true_logit.unsqueeze(1),
+                loss.unsqueeze(1),
+            ])
+
+        return torch.cat(feature_list, dim=1)
+
+
 def _sample_member_nonmember_indices(train_mask, test_mask, max_samples_per_class, random_state):
     member_idx = train_mask.nonzero(as_tuple=False).view(-1).cpu().numpy()
     non_member_idx = test_mask.nonzero(as_tuple=False).view(-1).cpu().numpy()
@@ -767,10 +835,27 @@ def membership_inference_attack(
         wd=shadow_wd, random_state=random_state
     )
 
-    shadow_in_post = _posterior_from_linear_model(shadow_w, X_shadow_train).cpu().numpy()
-    shadow_out_post = _posterior_from_linear_model(shadow_w, X_shadow_test).cpu().numpy()
-    target_in_post = _posterior_from_linear_model(w, X[target_member_idx]).cpu().numpy()
-    target_out_post = _posterior_from_linear_model(w, X[target_nonmember_idx]).cpu().numpy()
+    if train_mode == 'binary':
+        y_target_member = y_all[target_member_idx]
+        y_target_nonmember = y_all[target_nonmember_idx]
+        y_shadow_test = y_all[shadow_nonmember_idx]
+    else:
+        y_target_member = y_all[target_member_idx]
+        y_target_nonmember = y_all[target_nonmember_idx]
+        y_shadow_test = y_all[shadow_nonmember_idx]
+
+    shadow_in_post = _attack_features_from_linear_model(
+        shadow_w, X_shadow_train, y=y_all[shadow_member_idx], train_mode=train_mode
+    ).cpu().numpy()
+    shadow_out_post = _attack_features_from_linear_model(
+        shadow_w, X_shadow_test, y=y_shadow_test, train_mode=train_mode
+    ).cpu().numpy()
+    target_in_post = _attack_features_from_linear_model(
+        w, X[target_member_idx], y=y_target_member, train_mode=train_mode
+    ).cpu().numpy()
+    target_out_post = _attack_features_from_linear_model(
+        w, X[target_nonmember_idx], y=y_target_nonmember, train_mode=train_mode
+    ).cpu().numpy()
 
     X_attack = np.concatenate([shadow_in_post, shadow_out_post], axis=0)
     y_attack = np.concatenate([np.ones(shadow_in_post.shape[0]), np.zeros(shadow_out_post.shape[0])])
@@ -784,6 +869,7 @@ def membership_inference_attack(
     mia_auc = roc_auc_score(y_target, mia_preds)
     
     # ========== 深度诊断：理解 AUC < 0.5 的原因 ==========
+    print(f"[MIA DEEP DIAG] Attack feature dim = {X_attack.shape[1]}")
     print(f"[MIA DEEP DIAG] Shadow model - in: mean={shadow_in_post.mean():.4f} ± {shadow_in_post.std():.4f}, "
           f"out: mean={shadow_out_post.mean():.4f} ± {shadow_out_post.std():.4f}")
     print(f"[MIA DEEP DIAG] Target model - in: mean={target_in_post.mean():.4f} ± {target_in_post.std():.4f}, "
