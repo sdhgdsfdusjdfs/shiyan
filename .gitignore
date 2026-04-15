@@ -13,21 +13,17 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv*/
 venv/
 env/
 
 # Logs and local outputs
 *.log
 *.out
-result/
-**/result/
 log/
 **/log/
 
 # Model checkpoints / generated artifacts
-*.pth
-*.pt
-*.ckpt
 
 # Large datasets and processed cache
 data/
