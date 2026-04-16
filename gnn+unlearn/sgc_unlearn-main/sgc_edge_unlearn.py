@@ -11,6 +11,7 @@ from torchvision import datasets, transforms
 import argparse
 import os
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import f1_score, roc_auc_score, precision_score, recall_score
 
 # Below is for graph learning part
 from torch_geometric.nn.conv import MessagePassing
@@ -29,16 +30,72 @@ from torch_geometric.typing import Adj, OptTensor, PairTensor
 from torch_geometric.utils import add_remaining_self_loops
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
-from torch_geometric.datasets import Planetoid, Coauthor, Amazon, CitationFull, DGraphFin
+from torch_geometric.datasets import Planetoid, Coauthor, Amazon, CitationFull
 from torch_geometric.data import Data
 from ogb.nodeproppred import PygNodePropPredDataset
 import os.path as osp
 
 from torch.nn import init
 from utils import *
+from dgraphfin import DGraphFin
 
 from sklearn import preprocessing
 from numpy.linalg import norm
+
+
+def predict_from_weights(w, X):
+    with torch.no_grad():
+        if w.dim() == 1:
+            logits = X.mv(w)
+            probs_pos = torch.sigmoid(logits)
+            preds = torch.where(logits >= 0, torch.ones_like(logits), -torch.ones_like(logits))
+            scores = probs_pos.unsqueeze(1)
+        else:
+            logits = X.mm(w)
+            probs = torch.softmax(logits, dim=1)
+            preds = probs.argmax(dim=1)
+            scores = probs
+    return preds, scores
+
+
+def evaluate_metrics(w, X, y, train_mode):
+    preds, scores = predict_from_weights(w, X)
+
+    if train_mode == 'binary':
+        y_true = y.detach().cpu().numpy()
+        y_true_binary = (y_true == 1).astype(int)
+        pred_binary = (preds.detach().cpu().numpy() == 1).astype(int)
+        score_np = scores.detach().cpu().numpy().reshape(-1)
+        acc = float((preds == y).float().mean().item())
+        f1 = float(f1_score(y_true_binary, pred_binary, average='binary', zero_division=0))
+        precision = float(precision_score(y_true_binary, pred_binary, zero_division=0))
+        recall = float(recall_score(y_true_binary, pred_binary, zero_division=0))
+        try:
+            auc = float(roc_auc_score(y_true_binary, score_np))
+        except ValueError:
+            auc = float('nan')
+    else:
+        y_true = y.detach().cpu().numpy()
+        pred_np = preds.detach().cpu().numpy()
+        score_np = scores.detach().cpu().numpy()
+        acc = float((preds == y).float().mean().item())
+        f1 = float(f1_score(y_true, pred_np, average='macro', zero_division=0))
+        precision = float(precision_score(y_true, pred_np, average='macro', zero_division=0))
+        recall = float(recall_score(y_true, pred_np, average='macro', zero_division=0))
+        try:
+            if score_np.shape[1] == 2:
+                auc = float(roc_auc_score(y_true, score_np[:, 1]))
+            else:
+                auc = float(roc_auc_score(y_true, score_np, multi_class='ovr', average='macro'))
+        except ValueError:
+            auc = float('nan')
+
+    return acc, f1, auc, precision, recall
+
+
+def print_metric_summary(prefix, metrics):
+    acc, f1, auc, precision, recall = metrics
+    print(f"{prefix} accuracy = {acc:.4f}, F1 = {f1:.4f}, AUC = {auc:.4f}, precision = {precision:.4f}, recall = {recall:.4f}")
 
 
 def maybe_sample_debug_subgraph(data, debug_sample_size):
@@ -202,8 +259,10 @@ if __name__ == '__main__':
         data = dataset[0]
         data = random_planetoid_splits(data, num_classes=dataset.num_classes, val_lb=500, test_lb=1000, Flag=1).to(device)
     elif dataset_name == 'dgraphfin':
-        dataset = DGraphFin(root=args.data_dir)
+        dataset = DGraphFin(root=args.data_dir, name='DGraphFin')
         data = dataset[0]
+        if hasattr(data, 'valid_mask') and not hasattr(data, 'val_mask'):
+            data.val_mask = data.valid_mask
         if data.y.dim() > 1:
             data.y = data.y.squeeze(-1)
         if args.debug_sample_size > 0:
@@ -218,7 +277,7 @@ if __name__ == '__main__':
 
     # save the degree of each node for later use
     row = data.edge_index[0]
-    deg = degree(row).to(device)
+    deg = degree(row, num_nodes=data.num_nodes).to(device)
 
     # preprocess features
     if args.featNorm:
@@ -330,12 +389,12 @@ if __name__ == '__main__':
         opt_grad_norm = lr_grad(w, X_train, y_train, args.lam).norm().cpu()
 
     print('Time elapsed: %.2fs' % (time.time() - start))
-    if args.train_mode == 'ovr':
-        print('Val accuracy = %.4f' % ovr_lr_eval(w, X_val, y_val))
-        print('Test accuracy = %.4f' % ovr_lr_eval(w, X_test, y_test))
-    else:
-        print('Val accuracy = %.4f' % lr_eval(w, X_val, y_val))
-        print('Test accuracy = %.4f' % lr_eval(w, X_test, y_test))
+    train_metrics = evaluate_metrics(w, X_train, y_train if args.train_mode == 'binary' else data.y[train_mask], args.train_mode)
+    val_metrics = evaluate_metrics(w, X_val, y_val, args.train_mode)
+    test_metrics = evaluate_metrics(w, X_test, y_test, args.train_mode)
+    print_metric_summary('Train', train_metrics)
+    print_metric_summary('Val', val_metrics)
+    print_metric_summary('Test', test_metrics)
 
     ###########
     # budget for removal
@@ -356,11 +415,19 @@ if __name__ == '__main__':
     grad_norm_approx = torch.zeros((args.num_removes, args.trails)).float()
     removal_times = torch.zeros((args.num_removes, args.trails)).float()  # record the time of each removal
     acc_removal = torch.zeros((2, args.num_removes, args.trails)).float()  # record the acc after removal, 0 for val, 1 for test
+    f1_removal = torch.zeros((2, args.num_removes, args.trails)).float()
+    auc_removal = torch.zeros((2, args.num_removes, args.trails)).float()
+    precision_removal = torch.full((2, args.num_removes, args.trails), float('nan')).float()
+    recall_removal = torch.full((2, args.num_removes, args.trails), float('nan')).float()
     grad_norm_worst = torch.zeros((args.num_removes, args.trails)).float()  # worst case norm bound
     grad_norm_real = torch.zeros((args.num_removes, args.trails)).float()  # true norm
     # graph retrain
     removal_times_graph_retrain = torch.zeros((args.num_removes, args.trails)).float()
     acc_graph_retrain = torch.zeros((2, args.num_removes, args.trails)).float()
+    f1_graph_retrain = torch.zeros((2, args.num_removes, args.trails)).float()
+    auc_graph_retrain = torch.zeros((2, args.num_removes, args.trails)).float()
+    precision_graph_retrain = torch.full((2, args.num_removes, args.trails), float('nan')).float()
+    recall_graph_retrain = torch.full((2, args.num_removes, args.trails), float('nan')).float()
 
     for trail_iter in range(args.trails):
         print('*'*10, trail_iter, '*'*10)
@@ -439,9 +506,11 @@ if __name__ == '__main__':
                     num_retrain += 1
                 else:
                     grad_norm_approx_sum += grad_norm_approx[i, trail_iter]
-                # record acc each round
-                acc_removal[0, i, trail_iter] = ovr_lr_eval(w_approx, X_val_new, y_val)
-                acc_removal[1, i, trail_iter] = ovr_lr_eval(w_approx, X_test_new, y_test)
+                # record metrics each round
+                val_metrics = evaluate_metrics(w_approx, X_val_new, y_val, args.train_mode)
+                test_metrics = evaluate_metrics(w_approx, X_test_new, y_test, args.train_mode)
+                acc_removal[0, i, trail_iter], f1_removal[0, i, trail_iter], auc_removal[0, i, trail_iter], precision_removal[0, i, trail_iter], recall_removal[0, i, trail_iter] = val_metrics
+                acc_removal[1, i, trail_iter], f1_removal[1, i, trail_iter], auc_removal[1, i, trail_iter], precision_removal[1, i, trail_iter], recall_removal[1, i, trail_iter] = test_metrics
             else:
                 # removal from a single binary logistic regression model
                 X_rem = X_new[train_mask].to(device)
@@ -468,16 +537,21 @@ if __name__ == '__main__':
                     num_retrain += 1
                 else:
                     grad_norm_approx_sum += grad_norm_approx[i, trail_iter]
-                # record acc each round
-                acc_removal[0, i, trail_iter] = lr_eval(w_approx, X_val_new, y_val)
-                acc_removal[1, i, trail_iter] = lr_eval(w_approx, X_test_new, y_test)
+                # record metrics each round
+                val_metrics = evaluate_metrics(w_approx, X_val_new, y_val, args.train_mode)
+                test_metrics = evaluate_metrics(w_approx, X_test_new, y_test, args.train_mode)
+                acc_removal[0, i, trail_iter], f1_removal[0, i, trail_iter], auc_removal[0, i, trail_iter], precision_removal[0, i, trail_iter], recall_removal[0, i, trail_iter] = val_metrics
+                acc_removal[1, i, trail_iter], f1_removal[1, i, trail_iter], auc_removal[1, i, trail_iter], precision_removal[1, i, trail_iter], recall_removal[1, i, trail_iter] = test_metrics
 
             removal_times[i, trail_iter] = time.time() - start
             # Remember to replace X_old with X_new
             X_old = X_new.clone().detach().to(device)
             if i % args.disp == 0:
                 print('Iteration %d: time = %.2fs, number of retrain = %d' % (i+1, removal_times[i, trail_iter], num_retrain))
-                print('Val acc = %.4f, Test acc = %.4f' % (acc_removal[0, i, trail_iter], acc_removal[1, i, trail_iter]))
+                print('Val acc = %.4f, F1 = %.4f, AUC = %.4f, precision = %.4f, recall = %.4f' % (
+                    acc_removal[0, i, trail_iter], f1_removal[0, i, trail_iter], auc_removal[0, i, trail_iter], precision_removal[0, i, trail_iter], recall_removal[0, i, trail_iter]))
+                print('Test acc = %.4f, F1 = %.4f, AUC = %.4f, precision = %.4f, recall = %.4f' % (
+                    acc_removal[1, i, trail_iter], f1_removal[1, i, trail_iter], auc_removal[1, i, trail_iter], precision_removal[1, i, trail_iter], recall_removal[1, i, trail_iter]))
 
         #######
         # retrain each round with graph
@@ -518,8 +592,10 @@ if __name__ == '__main__':
                     # b = b_std * torch.randn(X_train.size(1), y_train.size(1)).float().to(device)
                     w_graph_retrain = ovr_lr_optimize(X_rem, y_train, args.lam, weight, b=None, num_steps=args.num_steps, verbose=args.verbose,
                                                       opt_choice=args.optimizer, lr=args.lr, wd=args.wd, device=device)
-                    acc_graph_retrain[0, i, trail_iter] = ovr_lr_eval(w_graph_retrain, X_val_new, y_val)
-                    acc_graph_retrain[1, i, trail_iter] = ovr_lr_eval(w_graph_retrain, X_test_new, y_test)
+                    val_metrics = evaluate_metrics(w_graph_retrain, X_val_new, y_val, args.train_mode)
+                    test_metrics = evaluate_metrics(w_graph_retrain, X_test_new, y_test, args.train_mode)
+                    acc_graph_retrain[0, i, trail_iter], f1_graph_retrain[0, i, trail_iter], auc_graph_retrain[0, i, trail_iter], precision_graph_retrain[0, i, trail_iter], recall_graph_retrain[0, i, trail_iter] = val_metrics
+                    acc_graph_retrain[1, i, trail_iter], f1_graph_retrain[1, i, trail_iter], auc_graph_retrain[1, i, trail_iter], precision_graph_retrain[1, i, trail_iter], recall_graph_retrain[1, i, trail_iter] = test_metrics
                 else:
                     # removal from a single binary logistic regression model
                     X_rem = X_new[train_mask].to(device)
@@ -527,12 +603,18 @@ if __name__ == '__main__':
                     # b = b_std * torch.randn(X_train.size(1)).float().to(device)
                     w_graph_retrain = lr_optimize(X_rem, y_train, args.lam, b=None, num_steps=args.num_steps, verbose=args.verbose,
                                                   opt_choice=args.optimizer, lr=args.lr, wd=args.wd, device=device)
-                    acc_graph_retrain[0, i, trail_iter] = lr_eval(w_graph_retrain, X_val_new, y_val)
-                    acc_graph_retrain[1, i, trail_iter] = lr_eval(w_graph_retrain, X_test_new, y_test)
+                    val_metrics = evaluate_metrics(w_graph_retrain, X_val_new, y_val, args.train_mode)
+                    test_metrics = evaluate_metrics(w_graph_retrain, X_test_new, y_test, args.train_mode)
+                    acc_graph_retrain[0, i, trail_iter], f1_graph_retrain[0, i, trail_iter], auc_graph_retrain[0, i, trail_iter], precision_graph_retrain[0, i, trail_iter], recall_graph_retrain[0, i, trail_iter] = val_metrics
+                    acc_graph_retrain[1, i, trail_iter], f1_graph_retrain[1, i, trail_iter], auc_graph_retrain[1, i, trail_iter], precision_graph_retrain[1, i, trail_iter], recall_graph_retrain[1, i, trail_iter] = test_metrics
 
                 removal_times_graph_retrain[i, trail_iter] = time.time() - start
                 if i % args.disp == 0:
-                    print('Iteration %d, time = %.2fs, val acc = %.4f, test acc = %.4f' % (i+1, removal_times_graph_retrain[i, trail_iter], acc_graph_retrain[0, i, trail_iter], acc_graph_retrain[1, i, trail_iter]))
+                    print('Iteration %d, time = %.2fs' % (i+1, removal_times_graph_retrain[i, trail_iter]))
+                    print('Val acc = %.4f, F1 = %.4f, AUC = %.4f, precision = %.4f, recall = %.4f' % (
+                        acc_graph_retrain[0, i, trail_iter], f1_graph_retrain[0, i, trail_iter], auc_graph_retrain[0, i, trail_iter], precision_graph_retrain[0, i, trail_iter], recall_graph_retrain[0, i, trail_iter]))
+                    print('Test acc = %.4f, F1 = %.4f, AUC = %.4f, precision = %.4f, recall = %.4f' % (
+                        acc_graph_retrain[1, i, trail_iter], f1_graph_retrain[1, i, trail_iter], auc_graph_retrain[1, i, trail_iter], precision_graph_retrain[1, i, trail_iter], recall_graph_retrain[1, i, trail_iter]))
 
     # save all results
     if not osp.exists(args.result_dir):
@@ -554,7 +636,20 @@ if __name__ == '__main__':
         save_path += '_retrain'
     save_path += '.pth'
 
-    torch.save({'grad_norm_approx': grad_norm_approx, 'removal_times': removal_times, 'acc_removal': acc_removal,
-                'grad_norm_worst': grad_norm_worst, 'grad_norm_real': grad_norm_real,
-                'removal_times_graph_retrain': removal_times_graph_retrain,
-                'acc_graph_retrain': acc_graph_retrain}, save_path)
+    torch.save({
+        'grad_norm_approx': grad_norm_approx,
+        'removal_times': removal_times,
+        'acc_removal': acc_removal,
+        'f1_removal': f1_removal,
+        'auc_removal': auc_removal,
+        'precision_removal': precision_removal,
+        'recall_removal': recall_removal,
+        'grad_norm_worst': grad_norm_worst,
+        'grad_norm_real': grad_norm_real,
+        'removal_times_graph_retrain': removal_times_graph_retrain,
+        'acc_graph_retrain': acc_graph_retrain,
+        'f1_graph_retrain': f1_graph_retrain,
+        'auc_graph_retrain': auc_graph_retrain,
+        'precision_graph_retrain': precision_graph_retrain,
+        'recall_graph_retrain': recall_graph_retrain,
+    }, save_path)
