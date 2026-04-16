@@ -26,3 +26,11 @@ D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py -
 
 # 5) 可选：边遗忘安全审计（链接推断）——全量图
 D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+
+已完成，下一步该这个了
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
