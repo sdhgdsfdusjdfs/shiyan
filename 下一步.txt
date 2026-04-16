@@ -17,6 +17,7 @@ D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset
 # 2) 正式规模一：num_removes=500
 D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --num_removes=500 --num_steps=100 --trails=1 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=50 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
 
+跑完两个了
 # 3) 正式规模二：num_removes=1000
 D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --num_removes=1000 --num_steps=100 --trails=1 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=100 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
 
