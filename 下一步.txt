@@ -1,3 +1,4 @@
+cd gnn+unlearn\sgc_unlearn-main
 4.15
 D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_feature_node_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=node --node_delete_strategy=high_degree --num_removes=500 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=50 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result --device=0
 D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_feature_node_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=node --node_delete_strategy=random --num_removes=1000 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=100 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result --device=0
@@ -34,3 +35,48 @@ python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin
 python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
 python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
 python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+4.17
+这五条的结果是这个，记得画图片表
+PS D:\experiment\shiyan> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+C:\Users\Administrator\AppData\Local\Programs\Python\Python310\python.exe: can't open file 'D:\\experiment\\shiyan\\edge_link_inference_eval.py': [Errno 2] No such file or directory
+PS D:\experiment\shiyan> cd gnn+unlearn\sgc_unlearn-main
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=500
+[Link Inference Before] AUC=0.8541, AP=0.8798
+[Link Inference After ] AUC=0.5618, AP=0.6235
+Delta AUC (after-before)=-0.2923, Delta AP=-0.2564
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=500
+[Link Inference Before] AUC=0.8283, AP=0.8450
+[Link Inference After ] AUC=0.5325, AP=0.5800
+Delta AUC (after-before)=-0.2959, Delta AP=-0.2650
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0                                  
+>> ^C
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+Using device: cuda:0
+Nodes=3700550, directed_edges=4300999, undirected_removed=500
+[Link Inference Before] AUC=0.8164, AP=0.8453
+[Link Inference After ] AUC=0.5141, AP=0.5687
+Delta AUC (after-before)=-0.3023, Delta AP=-0.2767
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+>> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+>> python edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+>> 
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=1000
+[Link Inference Before] AUC=0.8407, AP=0.8649
+[Link Inference After ] AUC=0.5182, AP=0.5739
+Delta AUC (after-before)=-0.3225, Delta AP=-0.2910
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=1000
+[Link Inference Before] AUC=0.8403, AP=0.8544
+[Link Inference After ] AUC=0.5428, AP=0.5886
+Delta AUC (after-before)=-0.2975, Delta AP=-0.2658
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=1000
+[Link Inference Before] AUC=0.8287, AP=0.8433
+[Link Inference After ] AUC=0.5200, AP=0.5590
+Delta AUC (after-before)=-0.3087, Delta AP=-0.2844
