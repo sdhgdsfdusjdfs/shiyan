@@ -1,0 +1,3 @@
+num_removes,file_path,final_auc_unlearn,final_auc_retrain,final_f1_unlearn,final_f1_retrain,mean_time_unlearn,mean_time_retrain,speedup_retrain_over_unlearn
+500,D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main\result_edge\dgraphfin_std_1e-02_lam_1e-03_nr_500_K_2_opt_Adam_mode_edge_eps_1.0_delta_1e-04_bin_1_retrain.pth,0.5974230170249939,0.5974223613739014,0.03188520297408104,0.031884778290987015,0.13825854659080505,0.22752146422863007,1.6456231447449736
+1000,D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main\result_edge\dgraphfin_std_1e-02_lam_1e-03_nr_1000_K_2_opt_Adam_mode_edge_eps_1.0_delta_1e-04_bin_1_retrain.pth,0.5975404381752014,0.5975404381752014,0.03188306838274002,0.03188328072428703,0.14241662621498108,0.23602968454360962,1.657318325932799

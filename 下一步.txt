@@ -80,3 +80,37 @@ Nodes=3700550, directed_edges=4300999, undirected_removed=1000
 [Link Inference Before] AUC=0.8287, AP=0.8433
 [Link Inference After ] AUC=0.5200, AP=0.5590
 Delta AUC (after-before)=-0.3087, Delta AP=-0.2844
+
+4.22（状态摘要，便于续跑）
+当前阶段：实验二（边遗忘）中的“链路推断安全评估”已完成 500/1000 删除规模、seed=0/1/2 的运行。
+已确认结论：After 相比 Before，AUC/AP 均显著下降（隐私风险下降方向成立）。
+下一步唯一主线：汇总 6 组结果并出图（AUC/AP Before vs After、Delta 对比），用于论文图表与阶段汇报。
+
+4.22（本轮完成）
+已完成：从状态文件自动抽取 6 组边遗忘链路推断结果，并生成论文可用统计表和图。
+论文适配性判断：当前数据“适合作为论文中边遗忘安全性章节的阶段性结果”，可支撑“功能遗忘不一定等于安全遗忘”叙事中的关系级证据。
+生成文件：
+- result_exp1/edge_link_summary/edge_link_inference_runs.csv
+- result_exp1/edge_link_summary/edge_link_inference_summary.md
+- result_exp1/edge_link_summary/edge_link_inference_before_after.png
+- result_exp1/edge_link_summary/edge_link_inference_delta.png
+关键统计：
+- num_removes=500: Delta AUC = -0.2968 +/- 0.0051, Delta AP = -0.2660 +/- 0.0102
+- num_removes=1000: Delta AUC = -0.3096 +/- 0.0125, Delta AP = -0.2804 +/- 0.0131
+下一阶段建议（补齐可发表性）：
+1) 在同配置下补跑 edge unlearning 的 utility/efficiency（AUC/F1/time + retrain 对比）并与本安全图同页呈现。
+2) 将删边策略从随机扩展到关键边（高影响关系）形成策略敏感性对比图。
+
+4.22（补图完成）
+已新增边遗忘的两张论文图（均已落盘）：
+1) edge_unlearning_utility_unlearn_vs_retrain.png（AUC/F1: Unlearning vs Retrain）
+2) edge_unlearning_efficiency_time_speedup.png（平均步时 + 加速比）
+生成脚本：
+- summarize_edge_unlearning_results.py
+附带汇总：
+- result_exp1/edge_link_summary/edge_unlearning_utility_efficiency.csv
+- result_exp1/edge_link_summary/edge_unlearning_utility_efficiency.md
+当前统计（500/1000）：
+- AUC(U/R) 约 0.5974/0.5974 与 0.5973/0.5973
+- F1(U/R) 约 0.0319/0.0319
+- speedup 约 2.718x 与 2.963x
