@@ -128,14 +128,34 @@ def remove_undirected_edges(edge_index: torch.Tensor, removed_edges: Set[Undirec
     return edge_index[:, keep_mask_t]
 
 
-def sample_removed_edges(edge_index: torch.Tensor, num_removes: int, seed: int) -> List[UndirectedEdge]:
+def sample_removed_edges(
+    edge_index: torch.Tensor,
+    num_removes: int,
+    seed: int,
+    strategy: str = "random",
+) -> List[UndirectedEdge]:
     rng = np.random.default_rng(seed)
     undirected_edges = collect_undirected_edges(edge_index)
     if not undirected_edges:
         return []
     k = min(num_removes, len(undirected_edges))
-    idx = rng.choice(len(undirected_edges), size=k, replace=False)
-    return [undirected_edges[i] for i in idx]
+    if strategy == "random":
+        idx = rng.choice(len(undirected_edges), size=k, replace=False)
+        return [undirected_edges[i] for i in idx]
+    if strategy == "high_degree":
+        row = edge_index[0].detach().cpu()
+        col = edge_index[1].detach().cpu()
+        deg = degree(row, num_nodes=int(edge_index.max().item()) + 1) + degree(col, num_nodes=int(edge_index.max().item()) + 1)
+        deg_np = deg.detach().cpu().numpy()
+        scored = []
+        for u, v in undirected_edges:
+            score = float(deg_np[u] + deg_np[v])
+            # jitter for tie-breaking while remaining reproducible
+            score += float(rng.random() * 1e-8)
+            scored.append((score, (u, v)))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [e for _, e in scored[:k]]
+    raise ValueError(f"Unknown edge_delete_strategy: {strategy}")
 
 
 def sample_non_edges(num_nodes: int, existing_edges: Set[UndirectedEdge], k: int, seed: int) -> List[UndirectedEdge]:
@@ -186,6 +206,13 @@ def main() -> None:
     parser.add_argument("--debug_sample_size", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=int, default=0)
+    parser.add_argument(
+        "--edge_delete_strategy",
+        type=str,
+        default="random",
+        choices=["random", "high_degree"],
+        help="Edge deletion strategy used in audit.",
+    )
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -210,7 +237,12 @@ def main() -> None:
     propagation = MyGraphConv(K=args.prop_step, add_self_loops=True, alpha=0.0, XdegNorm=False, GPR=False).to(device)
     X_before = propagation(X0, data.edge_index) if args.prop_step > 0 else X0
 
-    removed_edges = sample_removed_edges(data.edge_index, args.num_removes, args.seed)
+    removed_edges = sample_removed_edges(
+        data.edge_index,
+        args.num_removes,
+        args.seed,
+        args.edge_delete_strategy,
+    )
     removed_edge_set = set(removed_edges)
     edge_index_after = remove_undirected_edges(data.edge_index, removed_edge_set)
     X_after = propagation(X0, edge_index_after) if args.prop_step > 0 else X0
@@ -221,7 +253,10 @@ def main() -> None:
     auc_before, ap_before = evaluate_link_inference(X_before, removed_edges, neg_edges)
     auc_after, ap_after = evaluate_link_inference(X_after, removed_edges, neg_edges)
 
-    print(f"Nodes={data.num_nodes}, directed_edges={data.edge_index.size(1)}, undirected_removed={len(removed_edges)}")
+    print(
+        f"Nodes={data.num_nodes}, directed_edges={data.edge_index.size(1)}, "
+        f"undirected_removed={len(removed_edges)}, strategy={args.edge_delete_strategy}"
+    )
     print(f"[Link Inference Before] AUC={auc_before:.4f}, AP={ap_before:.4f}")
     print(f"[Link Inference After ] AUC={auc_after:.4f}, AP={ap_after:.4f}")
     print(f"Delta AUC (after-before)={auc_after - auc_before:.4f}, Delta AP={ap_after - ap_before:.4f}")

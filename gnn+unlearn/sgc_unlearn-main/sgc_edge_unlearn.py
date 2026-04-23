@@ -172,6 +172,22 @@ def maybe_sample_debug_subgraph(data, debug_sample_size):
     return sampled_data
 
 
+def build_edge_permutation(edge_index, deg, strategy='random'):
+    num_edges = edge_index.shape[1]
+    if strategy == 'random':
+        return torch.from_numpy(np.random.permutation(num_edges)).to(edge_index.device)
+    if strategy == 'high_degree':
+        row = edge_index[0].detach().cpu().numpy()
+        col = edge_index[1].detach().cpu().numpy()
+        deg_np = deg.detach().cpu().numpy()
+        scores = deg_np[row] + deg_np[col]
+        # Add a tiny random jitter to break ties stochastically.
+        jitter = np.random.random(num_edges) * 1e-8
+        order = np.argsort(-(scores + jitter))
+        return torch.from_numpy(order.astype(np.int64)).to(edge_index.device)
+    raise ValueError(f'Unknown edge_delete_strategy: {strategy}')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training a removal-enabled linear model [edge]')
     parser.add_argument('--data_dir', type=str, default='./PyG_datasets', help='data directory')
@@ -214,6 +230,9 @@ if __name__ == '__main__':
                         help='Compare acc with retraining each round.')
     parser.add_argument('--debug_sample_size', type=int, default=0,
                         help='Use an induced subgraph with this many nodes for quick debugging.')
+    parser.add_argument('--edge_delete_strategy', type=str, default='random',
+                        choices=['random', 'high_degree'],
+                        help='Edge deletion order: random or high_degree (prioritize high-degree endpoints).')
     # Use this if turning into .py code
     args = parser.parse_args()
 
@@ -433,8 +452,8 @@ if __name__ == '__main__':
         print('*'*10, trail_iter, '*'*10)
         if args.fix_random_seed:
             np.random.seed(trail_iter)
-        # get a random permutation for edge indices for each trail
-        perm = torch.from_numpy(np.random.permutation(data.edge_index.shape[1])).to(device)
+        # Build edge-removal order for this trial.
+        perm = build_edge_permutation(data.edge_index, deg, args.edge_delete_strategy)
         # Note that all edges are used in training, so we just need to decide the order to remove edges
         # the number of training samples will always be m
         edge_mask = torch.ones(data.edge_index.shape[1], dtype=torch.bool).to(device)
@@ -628,6 +647,8 @@ if __name__ == '__main__':
                                                                                            args.eps, args.delta)
     if args.train_mode == 'binary':
         save_path += '_bin_%s' % args.Y_binary
+    if args.edge_delete_strategy != 'random':
+        save_path += '_estrat_%s' % args.edge_delete_strategy
     if args.GPR:
         save_path += '_gpr'
     if args.compare_gnorm:

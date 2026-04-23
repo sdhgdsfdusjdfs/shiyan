@@ -114,3 +114,119 @@ Delta AUC (after-before)=-0.3087, Delta AP=-0.2844
 - AUC(U/R) 约 0.5974/0.5974 与 0.5973/0.5973
 - F1(U/R) 约 0.0319/0.0319
 - speedup 约 2.718x 与 2.963x
+
+下一步该跑
+cd D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main
+
+# nr=2000
+& 'D:\experiment\shiyan\.venv_cuda\Scripts\python.exe' .\sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --num_removes=2000 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=200 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
+
+# nr=5000
+& 'D:\experiment\shiyan\.venv_cuda\Scripts\python.exe' .\sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --num_removes=5000 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=500 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
+
+cd D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main
+
+# nr=2000
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+# nr=5000
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+cd D:\experiment\shiyan
+python .\summarize_edge_unlearning_results.py --result_dir D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main\result_edge --nrs 500 1000 2000 5000 --out_dir D:\experiment\shiyan\result_exp1\edge_link_summary
+
+这些是nr=2000和nr=5000的实验结果
+>> python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+>> python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=2000
+[Link Inference Before] AUC=0.8415, AP=0.8607
+[Link Inference After ] AUC=0.5262, AP=0.5723
+Delta AUC (after-before)=-0.3153, Delta AP=-0.2884
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=2000
+[Link Inference Before] AUC=0.8419, AP=0.8541
+[Link Inference After ] AUC=0.5373, AP=0.5771
+Delta AUC (after-before)=-0.3046, Delta AP=-0.2770
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=2000
+[Link Inference Before] AUC=0.8356, AP=0.8471
+[Link Inference After ] AUC=0.5399, AP=0.5734
+Delta AUC (after-before)=-0.2957, Delta AP=-0.2737
+PS D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main> python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+>> python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+>> python .\edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --num_removes=5000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=5000
+[Link Inference Before] AUC=0.8376, AP=0.8538
+[Link Inference After ] AUC=0.5470, AP=0.5917
+Delta AUC (after-before)=-0.2906, Delta AP=-0.2621
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=5000
+[Link Inference Before] AUC=0.8356, AP=0.8492
+[Link Inference After ] AUC=0.5373, AP=0.5761
+Delta AUC (after-before)=-0.2983, Delta AP=-0.2731
+Using device: cpu
+Nodes=3700550, directed_edges=4300999, undirected_removed=5000
+[Link Inference Before] AUC=0.8391, AP=0.8542
+[Link Inference After ] AUC=0.5425, AP=0.5826
+Delta AUC (after-before)=-0.2966, Delta AP=-0.2716
+4.23 (code update: edge deletion strategy)
+Completed changes:
+1) sgc_edge_unlearn.py: added --edge_delete_strategy {random,high_degree}
+2) edge_link_inference_eval.py: added --edge_delete_strategy {random,high_degree}
+3) summarize_edge_unlearning_results.py: added --strategy {random,high_degree,all}
+
+Next run commands (high_degree utility/efficiency):
+cd D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --edge_delete_strategy=high_degree --num_removes=500 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=50 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --edge_delete_strategy=high_degree --num_removes=1000 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=100 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe sgc_edge_unlearn.py --dataset=dgraphfin --train_mode=binary --Y_binary=1 --removal_mode=edge --edge_delete_strategy=high_degree --num_removes=2000 --num_steps=100 --trails=3 --optimizer=Adam --lr=0.5 --lam=1e-3 --std=1e-2 --eps=1.0 --delta=1e-4 --disp=200 --compare_retrain --data_dir=.\PyG_datasets --result_dir=.\result_edge --device=0
+
+Next run commands (high_degree link inference; seeds 0/1/2):
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+Summarize high_degree:
+cd D:\experiment\shiyan
+python .\summarize_edge_unlearning_results.py --result_dir D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main\result_edge --nrs 500 1000 2000 --strategy high_degree --out_dir D:\experiment\shiyan\result_exp1\edge_link_summary\high_degree
+
+4.23 (fix: high_degree summary command)
+Issue: summarize command failed not because result files were missing, but because summarize_edge_unlearning_results.py scanned only pattern *_bin_1_retrain.pth and missed *_bin_1_estrat_high_degree_retrain.pth.
+Fix: changed file scan pattern to dgraphfin*_mode_edge*.pth.
+Verification: command rerun succeeded and generated:
+- result_exp1/edge_link_summary/high_degree/edge_unlearning_utility_efficiency.csv
+- result_exp1/edge_link_summary/high_degree/edge_unlearning_utility_efficiency.md
+- result_exp1/edge_link_summary/high_degree/edge_unlearning_utility_unlearn_vs_retrain.png
+- result_exp1/edge_link_summary/high_degree/edge_unlearning_efficiency_time_speedup.png
+Quick readout: high_degree and random show nearly identical utility (AUC/F1), while speedup remains ~1.59x.
+
+4.23 (next experiments to run)
+Goal: close edge-strategy evidence with high_degree security audit.
+
+Run now (high_degree link inference):
+cd D:\experiment\shiyan\gnn+unlearn\sgc_unlearn-main
+
+# nr=500
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=500 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+# nr=1000
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=1000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+# nr=2000
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=0 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=1 --device=0
+D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py --data_dir=.\PyG_datasets --dataset=dgraphfin --edge_delete_strategy=high_degree --num_removes=2000 --prop_step=2 --debug_sample_size=0 --seed=2 --device=0
+
+After run:
+- paste key outputs (Before/After AUC/AP + Delta) to this status file
+- then build random vs high_degree comparison table

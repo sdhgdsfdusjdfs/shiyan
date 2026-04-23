@@ -11,12 +11,15 @@ import numpy as np
 import torch
 
 
-FILE_RE = re.compile(r"dgraphfin_.*_nr_(?P<nr>\d+)_.*_mode_edge_.*_bin_1_retrain\.pth$")
+FILE_RE = re.compile(
+    r"dgraphfin_.*_nr_(?P<nr>\d+)_.*_mode_edge_.*_bin_1(?:_estrat_(?P<strategy>random|high_degree))?_retrain\.pth$"
+)
 
 
 @dataclass
 class EdgeSummary:
     nr: int
+    strategy: str
     file_path: Path
     final_auc_unlearn: float
     final_auc_retrain: float
@@ -36,6 +39,7 @@ def build_summary(path: Path) -> EdgeSummary:
     if not m:
         raise ValueError(f"Unrecognized edge result filename: {path.name}")
     nr = int(m.group("nr"))
+    strategy = m.group("strategy") or "random"
 
     obj = torch.load(path, map_location="cpu", weights_only=False)
     auc_u = to_np(obj["auc_removal"][1, :, :])
@@ -55,6 +59,7 @@ def build_summary(path: Path) -> EdgeSummary:
 
     return EdgeSummary(
         nr=nr,
+        strategy=strategy,
         file_path=path,
         final_auc_unlearn=final_auc_u,
         final_auc_retrain=final_auc_r,
@@ -73,6 +78,7 @@ def write_csv(rows: list[EdgeSummary], out_csv: Path) -> None:
         w.writerow(
             [
                 "num_removes",
+                "strategy",
                 "file_path",
                 "final_auc_unlearn",
                 "final_auc_retrain",
@@ -87,6 +93,7 @@ def write_csv(rows: list[EdgeSummary], out_csv: Path) -> None:
             w.writerow(
                 [
                     r.nr,
+                    r.strategy,
                     str(r.file_path),
                     r.final_auc_unlearn,
                     r.final_auc_retrain,
@@ -104,12 +111,12 @@ def write_markdown(rows: list[EdgeSummary], out_md: Path) -> None:
     lines = [
         "# Edge Unlearning Utility/Efficiency Summary",
         "",
-        "| num_removes | AUC (U/R) | F1 (U/R) | mean time (U/R, s) | speedup |",
-        "|---:|---:|---:|---:|---:|",
+        "| num_removes | strategy | AUC (U/R) | F1 (U/R) | mean time (U/R, s) | speedup |",
+        "|---:|:---|---:|---:|---:|---:|",
     ]
     for r in rows:
         lines.append(
-            f"| {r.nr} | {r.final_auc_unlearn:.4f} / {r.final_auc_retrain:.4f} | "
+            f"| {r.nr} | {r.strategy} | {r.final_auc_unlearn:.4f} / {r.final_auc_retrain:.4f} | "
             f"{r.final_f1_unlearn:.4f} / {r.final_f1_retrain:.4f} | "
             f"{r.mean_time_unlearn:.4f} / {r.mean_time_retrain:.4f} | "
             f"{r.speedup:.3f}x |"
@@ -189,19 +196,27 @@ def main() -> None:
         default=r"d:\experiment\shiyan\result_exp1\edge_link_summary",
         help="Output directory for summary and plots",
     )
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default="random",
+        choices=["random", "high_degree", "all"],
+        help="Filter files by deletion strategy; use all to include both.",
+    )
     args = parser.parse_args()
 
     result_dir = Path(args.result_dir)
     out_dir = Path(args.out_dir)
 
     rows: list[EdgeSummary] = []
-    for p in sorted(result_dir.glob("dgraphfin*_mode_edge*_bin_1_retrain.pth")):
+    for p in sorted(result_dir.glob("dgraphfin*_mode_edge*.pth")):
         m = FILE_RE.match(p.name)
         if not m:
             continue
-        if int(m.group("nr")) in args.nrs:
-            rows.append(build_summary(p))
-    rows.sort(key=lambda r: r.nr)
+        row = build_summary(p)
+        if row.nr in args.nrs and (args.strategy == "all" or row.strategy == args.strategy):
+            rows.append(row)
+    rows.sort(key=lambda r: (r.nr, r.strategy))
 
     if not rows:
         raise SystemExit(f"No matching edge result files found in {result_dir}")
@@ -221,4 +236,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
