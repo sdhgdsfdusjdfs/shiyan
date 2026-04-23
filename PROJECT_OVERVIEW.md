@@ -563,3 +563,81 @@ w_new = w - eta * grad + noise_from_laplace(scale)
 ## Maintenance Note
 
 This file is intended to be updated during future conversations whenever the project direction, architecture, experiment protocol, or progress changes in a meaningful way.
+
+## Edge Experiment Update (2026-04-23)
+
+This section records the latest edge-unlearning findings on `DGraphFin` under the current stable setting:
+
+1. `train_mode=binary`
+2. `compare_retrain=True`
+3. utility/efficiency from `sgc_edge_unlearn.py`
+4. security from `edge_link_inference_eval.py` (link inference)
+
+### Utility & Efficiency Summary
+
+Random strategy (`random`) observations:
+
+1. `num_removes=500/1000/2000/5000` all show near-identical utility
+2. final `AUC` remains around `0.5974-0.5975`
+3. final `F1` remains around `0.0319`
+4. `Unlearning` and `Retrain` are nearly overlapping in utility
+5. speedup stays around `1.59x-1.66x`
+
+High-degree strategy (`high_degree`) observations:
+
+1. `num_removes=500/1000/2000` also show near-identical utility
+2. final `AUC` remains around `0.5973-0.5974`
+3. final `F1` remains around `0.0319`
+4. speedup stays around `1.59x`
+
+Interpretation:
+
+1. Edge-unlearning update path is computationally meaningful (stable speedup).
+2. Utility under the current setup is in a low-signal plateau.
+3. Deletion strategy does not materially change utility in this setting.
+
+### Security Summary (Link Inference)
+
+Random strategy (`random`) mean Delta (After-Before):
+
+1. `nr=500`: Delta AUC `-0.2968`, Delta AP `-0.2660`
+2. `nr=1000`: Delta AUC `-0.3096`, Delta AP `-0.2804`
+3. `nr=2000`: Delta AUC `-0.3052`, Delta AP `-0.2797`
+4. `nr=5000`: Delta AUC `-0.2952`, Delta AP `-0.2689`
+
+High-degree strategy (`high_degree`) mean Delta (After-Before):
+
+1. `nr=500`: Delta AUC `-0.0115`, Delta AP `-0.0117`
+2. `nr=1000`: Delta AUC `-0.0283`, Delta AP `-0.0277`
+3. `nr=2000`: Delta AUC `-0.2016`, Delta AP `-0.1410`
+4. `nr=5000`: Delta AUC `-0.1667`, Delta AP `-0.1063`
+
+Key security comparison:
+
+1. At every tested scale, `|Delta|` under `random` is larger than under `high_degree`.
+2. This means random edge deletion reduces link-inference recoverability more strongly in this setup.
+3. Therefore, security sensitivity to deletion strategy is now empirically established.
+
+### Main Conclusions for Paper Narrative
+
+The edge experiment can now support the following thesis-aligned statements:
+
+1. Edge unlearning is an efficient approximation to retraining (`~1.6x` speedup).
+2. Functional metrics alone are insufficient to judge privacy gains (utility is similar across strategies).
+3. Security outcomes depend on *what* is deleted, not only *how much* is deleted.
+4. This directly supports the paper's core claim: functional forgetting does not automatically imply security forgetting.
+
+### Publication Readiness Status (Edge Line)
+
+Current status:
+
+1. Utility: completed for both `random` and `high_degree`
+2. Efficiency: completed for both `random` and `high_degree`
+3. Security: completed for both `random` and `high_degree` (500/1000/2000/5000)
+4. Strategy comparison evidence: completed
+
+Remaining cross-paper gaps:
+
+1. Feature-unlearning line is not yet at the same maturity level.
+2. Second-dataset validation (e.g., `Elliptic++`) is still pending.
+3. Mechanism diagnostics (PR-AUC / threshold sensitivity) are recommended as strengthening analysis.

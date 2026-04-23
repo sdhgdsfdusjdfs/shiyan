@@ -230,3 +230,19 @@ D:\experiment\shiyan\.venv_cuda\Scripts\python.exe edge_link_inference_eval.py -
 After run:
 - paste key outputs (Before/After AUC/AP + Delta) to this status file
 - then build random vs high_degree comparison table
+
+4.23 (high_degree link inference @ nr=5000 completed)
+New results (strategy=high_degree, seed=0/1/2):
+- seed0: Delta AUC=-0.1672, Delta AP=-0.1096
+- seed1: Delta AUC=-0.1664, Delta AP=-0.1044
+- seed2: Delta AUC=-0.1666, Delta AP=-0.1049
+Mean: Delta AUC=-0.1667, Delta AP=-0.1063
+
+Strategy comparison table generated:
+- result_exp1/edge_link_summary/strategy_compare/edge_link_strategy_compare.csv
+- result_exp1/edge_link_summary/strategy_compare/edge_link_strategy_compare.md
+
+Current take-away for paper:
+- random has larger absolute Delta AUC/AP than high_degree across 500/1000/2000/5000.
+- utility/efficiency between strategies are similar, but security impact differs.
+- supports the claim: "what to delete" matters for security outcomes.
