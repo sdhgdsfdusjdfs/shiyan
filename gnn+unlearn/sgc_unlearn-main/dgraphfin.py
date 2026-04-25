@@ -1,4 +1,5 @@
 from typing import Optional, Callable, List
+import os
 import os.path as osp
 
 import numpy as np
@@ -65,13 +66,53 @@ class DGraphFin(InMemoryDataset):
 
     url = ''
 
-    def __init__(self, root: str, name: str, 
+    def __init__(self, root: str, name: str,
                  transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None):
-        
+        root = self._resolve_root(root, name)
         self.name = name
         super().__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
+
+    @staticmethod
+    def _resolve_root(root: str, name: str) -> str:
+        dataset_name = name
+        raw_file = 'dgraphfin.npz'
+
+        script_dir = osp.dirname(osp.abspath(__file__))
+        project_root = osp.abspath(osp.join(script_dir, '..', '..'))
+        workspace_root = osp.abspath(osp.join(project_root, '..'))
+        abs_root = osp.abspath(root)
+
+        candidates = []
+        for candidate in [
+            abs_root,
+            osp.dirname(abs_root),
+            osp.join(workspace_root, 'PyG_datasets'),
+            osp.join(project_root, 'PyG_datasets'),
+            osp.join(script_dir, 'PyG_datasets'),
+            workspace_root,
+            project_root,
+            script_dir,
+        ]:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        for candidate in candidates:
+            # candidate is already dataset dir, e.g. .../DGraphFin
+            if osp.basename(candidate).lower() == dataset_name.lower():
+                if osp.exists(osp.join(candidate, 'raw', raw_file)):
+                    resolved = osp.dirname(candidate)
+                    if resolved != abs_root:
+                        print(f"[DGraphFin] Auto-resolved root: {resolved}")
+                    return resolved
+            # candidate is root dir, e.g. .../PyG_datasets
+            if osp.exists(osp.join(candidate, dataset_name, 'raw', raw_file)):
+                if candidate != abs_root:
+                    print(f"[DGraphFin] Auto-resolved root: {candidate}")
+                return candidate
+
+        return root
 
     @property
     def raw_dir(self) -> str:

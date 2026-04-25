@@ -641,3 +641,68 @@ Remaining cross-paper gaps:
 1. Feature-unlearning line is not yet at the same maturity level.
 2. Second-dataset validation (e.g., `Elliptic++`) is still pending.
 3. Mechanism diagnostics (PR-AUC / threshold sensitivity) are recommended as strengthening analysis.
+
+## Feature Unlearning Update (2026-04-25)
+
+This section records the latest feature-unlearning findings on `DGraphFin` using the AIA baseline (`attribute_inference_eval.py`).
+
+### Data Hygiene
+
+Paper-facing statistics are computed from:
+
+1. `result_exp1/feature_aia_summary/aia_feature_runs_clean_for_paper.csv`
+2. debug rows (`num_removes=50`) excluded
+3. formal settings retained:
+   - `num_removes in {500, 1000}`
+   - `sensitive_dim in {0,1,2}` (for `nr=500`)
+   - both `random` and `high_degree`
+   - `seed in {0,1,2}`
+
+Outlier check status:
+
+1. group-wise IQR checks were applied on `delta_auc` and `delta_ap`
+2. no sample met the strict joint-outlier exclusion rule
+3. therefore, all formal rows are retained in clean statistics
+
+### Security Findings (AIA)
+
+At `num_removes=500`:
+
+1. `sensitive_dim=0`:
+   - random: Delta AUC `-0.2194`, Delta AP `-0.1244`
+   - high_degree: Delta AUC `-0.2480`, Delta AP `-0.0698`
+2. `sensitive_dim=1`:
+   - random: Delta AUC `-0.1271`, Delta AP `-0.1665`
+   - high_degree: Delta AUC `-0.1460`, Delta AP `-0.1736`
+3. `sensitive_dim=2`:
+   - random: Delta AUC `-0.0079`, Delta AP `-0.0129`
+   - high_degree: Delta AUC `-0.0080`, Delta AP `-0.0064`
+
+At `num_removes=1000`, `sensitive_dim=0`:
+
+1. random: Delta AUC `-0.2225`, Delta AP `-0.1141`
+2. high_degree: Delta AUC `-0.2488`, Delta AP `-0.0747`
+
+### Interpretable Conclusions
+
+1. Feature unlearning reduces attribute-inference capability in most tested settings (`delta_auc < 0`, `delta_ap < 0`).
+2. Privacy gain is strongly sensitive to *which feature* is forgotten:
+   - strong gains on `sensitive_dim=0`
+   - moderate gains on `sensitive_dim=1`
+   - near-zero gains on `sensitive_dim=2`
+3. This provides concrete evidence for the paper claim:
+   - functional forgetting/security forgetting effectiveness depends on deleted content semantics, not only delete count.
+
+### Strategy Variance Note
+
+Observed behavior:
+
+1. `high_degree` rows are nearly identical across seeds under current implementation.
+2. This is expected with deterministic ranking-based deletion and should be reported transparently as low seed variance under that strategy.
+
+### Plot Assets
+
+Generated figure files:
+
+1. `result_exp1/feature_aia_summary/aia_feature_delta_by_sensitive_dim_nr500.png`
+2. `result_exp1/feature_aia_summary/aia_feature_delta_by_num_removes_dim0.png`

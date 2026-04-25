@@ -39,6 +39,15 @@ python sgc_edge_unlearn.py --dataset='cora' --std=0.1 --num_removes=2000 --train
                            --disp=100 --trails=1 --compare_retrain --optimizer='LBFGS' --data_dir='../PyG_datasets'
 ```
 
+**Attribute inference audit for feature unlearning (AIA baseline, DGraphFin)**
+```
+python attribute_inference_eval.py --data_dir='d:/experiment/PyG_datasets' --dataset='dgraphfin' \
+                                   --num_removes=500 --node_delete_strategy='random' --prop_step=2 \
+                                   --sensitive_dim=0 --forget_mode='sensitive_dim' --seed=0 --device=0
+```
+
+No extra third-party attack repository is required for this baseline; it only uses existing `torch` + `scikit-learn`.
+
 # Contact
 Please contact Chao Pan (chaopan2@illinois.edu), Eli Chien (ichien3@illinois.edu) if you have any question.
 
